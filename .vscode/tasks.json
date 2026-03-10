@@ -1,0 +1,56 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Yocto: Init and Sync Layers",
+      "type": "shell",
+      "command": "repo init -u . -m ${workspaceFolder}/manifests/default.xml && repo sync -j\"$(nproc)\"",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Yocto: Show Layers",
+      "type": "shell",
+      "command": "TEMPLATECONF=${workspaceFolder}/layers/meta-project/conf/templates/default . ./layers/poky/oe-init-build-env build && bitbake-layers show-layers",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Yocto: Build core-image-project",
+      "type": "shell",
+      "command": "TEMPLATECONF=${workspaceFolder}/layers/meta-project/conf/templates/default . ./layers/poky/oe-init-build-env build && bitbake core-image-project",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Yocto: Build core-image-minimal",
+      "type": "shell",
+      "command": "TEMPLATECONF=${workspaceFolder}/layers/meta-project/conf/templates/default . ./layers/poky/oe-init-build-env build && bitbake core-image-minimal",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "Yocto: Clean core-image-project",
+      "type": "shell",
+      "command": "TEMPLATECONF=${workspaceFolder}/layers/meta-project/conf/templates/default . ./layers/poky/oe-init-build-env build && bitbake -c cleansstate core-image-project",
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "problemMatcher": []
+    },
+  ]
+}

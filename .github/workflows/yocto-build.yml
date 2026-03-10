@@ -1,0 +1,69 @@
+name: Yocto Build
+
+on:
+  workflow_dispatch:
+  push:
+  pull_request:
+
+concurrency:
+  group: yocto-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build ${{ matrix.image }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        image:
+          - core-image-minimal
+          - core-image-full-cmdline
+
+    env:
+      DEBIAN_FRONTEND: noninteractive
+
+    steps:
+      - name: Checkout manifest repository
+        uses: actions/checkout@v4
+
+      - name: Install host dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential chrpath cpio curl diffstat file gawk git iputils-ping lz4 \
+            python3 python3-git python3-jinja2 python3-pexpect python3-pip socat \
+            texinfo unzip wget xz-utils zstd
+
+      - name: Install repo tool
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/bin"
+          curl -fsSL https://storage.googleapis.com/git-repo-downloads/repo -o "$HOME/bin/repo"
+          chmod +x "$HOME/bin/repo"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+
+      - name: Initialize and sync upstream layers
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo init -u "file://${GITHUB_WORKSPACE}" -m manifests/default.xml
+          repo sync --no-clone-bundle --no-tags -j"$(nproc)"
+
+      - name: Initialize build directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          TEMPLATECONF=../layers/meta-project/conf/templates/default \
+            . layers/poky/oe-init-build-env build
+
+      - name: Build image
+        shell: bash
+        run: |
+          set -euo pipefail
+          TEMPLATECONF=../layers/meta-project/conf/templates/default \
+            . layers/poky/oe-init-build-env build
+          bitbake "${{ matrix.image }}"

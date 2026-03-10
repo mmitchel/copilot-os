@@ -1,0 +1,28 @@
+#!/bin/sh
+
+# The root filesystem must already be mounted by an earlier module such as
+# initramfs-module-rootfs. This module only runs when the mounted root device
+# contains /sysroot/ostree, then executes ostree-prepare-root before
+# switch_root.
+
+OSTREE_PREPARE_ROOT=/usr/lib/ostree/ostree-prepare-root
+
+ostree_enabled() {
+	[ -n "$ROOTFS_DIR" ] && [ -d "$ROOTFS_DIR/sysroot/ostree" ]
+}
+
+ostree_run() {
+	if [ -z "$ROOTFS_DIR" ] || ! mountpoint -q "$ROOTFS_DIR"; then
+		fatal "ERROR: OSTree module requires a mounted root filesystem."
+	fi
+
+	if [ ! -x "$OSTREE_PREPARE_ROOT" ]; then
+		fatal "ERROR: '$OSTREE_PREPARE_ROOT' is not available in initramfs."
+	fi
+
+	info "Preparing OSTree root at $ROOTFS_DIR"
+	if ! "$OSTREE_PREPARE_ROOT" "$ROOTFS_DIR"; then
+		fatal "ERROR: ostree-prepare-root failed for '$ROOTFS_DIR'."
+	fi
+	bootparam_init="${bootparam_init:-/sbin/init}"
+}

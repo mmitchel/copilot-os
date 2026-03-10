@@ -1,0 +1,50 @@
+{
+  "bitbake.pathToBitbakeFolder": "${workspaceFolder}/layers/poky/bitbake",
+  "bitbake.pathToEnvScript": "${workspaceFolder}/layers/poky/oe-init-build-env",
+  "bitbake.pathToBuildFolder": "${workspaceFolder}/build",
+  "bitbake.commandWrapper": "",
+  "bitbake.workingDirectory": "${workspaceFolder}/layers/poky",
+  "python.autoComplete.extraPaths": [
+    "${workspaceFolder}/layers/poky/bitbake/lib",
+    "${workspaceFolder}/layers/poky/meta/lib"
+  ],
+  "python.analysis.extraPaths": [
+    "${workspaceFolder}/layers/poky/bitbake/lib",
+    "${workspaceFolder}/layers/poky/meta/lib"
+  ],
+  "python.analysis.exclude": [
+    "${workspaceFolder}/build/**",
+    "${workspaceFolder}/layers/poky/**",
+    "${workspaceFolder}/layers/meta-openembedded/**",
+    "${workspaceFolder}/layers/meta-raspberrypi/**",
+    "${workspaceFolder}/layers/meta-updater/**"
+  ],
+  "files.associations": {
+    "*.bb": "bitbake",
+    "*.bbappend": "bitbake",
+    "*.bbclass": "bitbake",
+    "*.conf": "bitbake",
+    "*.inc": "bitbake"
+  },
+  "search.exclude": {
+    "**/build/tmp/**": true,
+    "**/build/sstate-cache/**": true,
+    "**/build/downloads/**": true,
+    "**/build/cache/**": true,
+    "**/build-history/**": true
+  },
+  "files.watcherExclude": {
+    "**/build/tmp/**": true,
+    "**/build/sstate-cache/**": true,
+    "**/build/downloads/**": true,
+    "**/build/cache/**": true,
+    "**/build-history/**": true
+  },
+  "terminal.integrated.enablePersistentSessions": false,
+  "terminal.integrated.persistentSessionReviveProcess": "never",
+  "[bitbake]": {
+    "editor.tabSize": 4,
+    "editor.insertSpaces": true
+  },
+  "files.saveConflictResolution": "overwriteFileOnDisk"
+}

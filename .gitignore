@@ -1,0 +1,33 @@
+# repo tool metadata
+.repo/
+
+# Upstream Yocto layer checkouts (keep only project-owned layer tracked)
+layers/*
+layers/meta-clang/
+layers/meta-openembedded/
+layers/meta-security/
+layers/meta-updater/
+layers/meta-virtualization/
+layers/meta-intel/
+layers/meta-raspberrypi/
+layers/meta-tegra/
+layers/poky/
+!layers/meta-project/
+!layers/meta-project/**
+
+# Yocto build directories and temporary artifacts
+build/
+build-*/
+
+# Common Yocto caches/artifacts (in case configured outside build/)
+__pycache__/
+downloads/
+sstate-cache/
+tmp/
+cache/
+buildhistory/
+
+# Generated environment and logs
+*.log
+*.lock
+*.sock

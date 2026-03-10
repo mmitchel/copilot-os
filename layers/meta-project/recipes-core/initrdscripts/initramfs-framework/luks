@@ -1,0 +1,188 @@
+#!/bin/sh
+
+# Supported kernel command line forms:
+#   cryptdevice=<device-spec>:<mapping-name>
+#   cryptroot=<device-spec> [cryptname=<mapping-name>]
+#
+# If neither is set, the module tries to locate the lowest-numbered
+# crypto_LUKS partition on the same disk as bootparam_root.
+
+luks_resolve_device() {
+	case "$1" in
+		UUID=*)
+			echo "/dev/disk/by-uuid/${1#UUID=}"
+			;;
+		PARTUUID=*)
+			echo "/dev/disk/by-partuuid/${1#PARTUUID=}"
+			;;
+		PARTLABEL=*)
+			echo "/dev/disk/by-partlabel/${1#PARTLABEL=}"
+			;;
+		LABEL=*)
+			echo "/dev/disk/by-label/${1#LABEL=}"
+			;;
+		*)
+			echo "$1"
+			;;
+	esac
+}
+
+luks_partition_prefix() {
+	case "$1" in
+		*[0-9])
+			echo "${1}p"
+			;;
+		*)
+			echo "$1"
+			;;
+	esac
+}
+
+luks_parent_device() {
+	case "$1" in
+		/dev/mmcblk*p[0-9]*|/dev/nvme*n*p[0-9]*)
+			echo "${1%p[0-9]*}"
+			;;
+		/dev/sd[a-z][0-9]*|/dev/vd[a-z][0-9]*|/dev/xvd[a-z][0-9]*|/dev/hd[a-z][0-9]*)
+			echo "${1%%[0-9]*}"
+			;;
+		*)
+			echo ""
+			;;
+	esac
+}
+
+luks_is_luks_device() {
+	[ -b "$1" ] || return 1
+	[ "$(blkid -o value -s TYPE "$1" 2>/dev/null)" = "crypto_LUKS" ]
+}
+
+luks_autodetect_source() {
+	root_resolved=""
+	parent_device=""
+	partition_prefix=""
+	candidate=""
+	partnum=""
+	lowest_candidate=""
+	lowest_partnum=""
+
+	if [ -z "$bootparam_root" ]; then
+		return 1
+	fi
+
+	root_resolved=$(luks_resolve_device "$bootparam_root")
+	if [ -z "$root_resolved" ] || [ ! -e "$root_resolved" ]; then
+		return 1
+	fi
+
+	if luks_is_luks_device "$root_resolved"; then
+		echo "$root_resolved"
+		return 0
+	fi
+
+	parent_device=$(luks_parent_device "$root_resolved")
+	if [ -z "$parent_device" ] || [ ! -b "$parent_device" ]; then
+		return 1
+	fi
+
+	partition_prefix=$(luks_partition_prefix "$parent_device")
+	for candidate in "${partition_prefix}"[0-9]*; do
+		if [ ! -b "$candidate" ]; then
+			continue
+		fi
+
+		partnum="${candidate#$partition_prefix}"
+		case "$partnum" in
+			''|*[!0-9]*)
+				continue
+				;;
+		esac
+
+		if ! luks_is_luks_device "$candidate"; then
+			continue
+		fi
+
+		if [ -z "$lowest_candidate" ] || [ "$partnum" -lt "$lowest_partnum" ]; then
+			lowest_candidate="$candidate"
+			lowest_partnum="$partnum"
+		fi
+	done
+
+	if [ -n "$lowest_candidate" ]; then
+		echo "$lowest_candidate"
+		return 0
+	fi
+
+	return 1
+}
+
+luks_enabled() {
+	[ -n "$bootparam_cryptdevice" ] || [ -n "$bootparam_cryptroot" ] || luks_autodetect_source >/dev/null 2>&1
+}
+
+luks_run() {
+	source_spec=""
+	resolved_source=""
+	mapping_name=""
+	mapped_device=""
+	key_args=""
+	root_resolved=""
+
+	load_kernel_module dm-crypt
+	load_kernel_module dm-mod
+
+	if [ -n "$bootparam_cryptdevice" ]; then
+		source_spec=$(echo "$bootparam_cryptdevice" | cut -d: -f1)
+		mapping_name=$(echo "$bootparam_cryptdevice" | cut -d: -f2)
+	elif [ -n "$bootparam_cryptroot" ]; then
+		source_spec="$bootparam_cryptroot"
+		mapping_name="${bootparam_cryptname:-cryptroot}"
+	else
+		source_spec=$(luks_autodetect_source)
+		mapping_name="${bootparam_cryptname:-cryptroot}"
+		if [ -n "$source_spec" ]; then
+			info "Auto-detected LUKS source $source_spec from root device $bootparam_root"
+		fi
+	fi
+
+	if [ -z "$source_spec" ]; then
+		fatal "ERROR: LUKS module enabled without a source device."
+	fi
+
+	if [ -z "$mapping_name" ]; then
+		mapping_name="cryptroot"
+	fi
+
+	resolved_source=$(luks_resolve_device "$source_spec")
+	if [ ! -e "$resolved_source" ]; then
+		fatal "ERROR: LUKS source '$source_spec' does not exist."
+	fi
+
+	if [ -n "$bootparam_cryptkey" ]; then
+		key_args="--key-file $bootparam_cryptkey"
+	fi
+
+	info "Opening LUKS device $resolved_source as $mapping_name"
+	if ! cryptsetup luksOpen $key_args "$resolved_source" "$mapping_name"; then
+		fatal "ERROR: Failed to unlock LUKS device '$resolved_source'."
+	fi
+
+	if command -v udevadm >/dev/null 2>&1; then
+		udevadm settle || true
+	fi
+
+	mapped_device="/dev/mapper/$mapping_name"
+	if [ ! -e "$mapped_device" ]; then
+		fatal "ERROR: LUKS mapped device '$mapped_device' was not created."
+	fi
+
+	if [ -z "$bootparam_root" ]; then
+		bootparam_root="$mapped_device"
+		return
+	fi
+
+	root_resolved=$(luks_resolve_device "$bootparam_root")
+	if [ "$root_resolved" = "$resolved_source" ]; then
+		bootparam_root="$mapped_device"
+	fi
+}

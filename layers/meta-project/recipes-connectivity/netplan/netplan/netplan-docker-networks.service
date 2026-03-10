@@ -1,0 +1,12 @@
+[Unit]
+Description=Create Docker networks declared in netplan YAML
+After=network-online.target docker.service
+Wants=network-online.target docker.service
+ConditionPathExistsGlob=/etc/netplan/*.yaml
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/netplan/plugins/netplan-docker-networks.py
+
+[Install]
+WantedBy=multi-user.target

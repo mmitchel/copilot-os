@@ -1,0 +1,53 @@
+name: Yocto Build Full Cmdline (GHCR Ubuntu 22.04)
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - ".github/workflows/yocto-build-full-cmdline-container.yml"
+      - "manifests/**"
+      - "layers/meta-project/**"
+  pull_request:
+    paths:
+      - ".github/workflows/yocto-build-full-cmdline-container.yml"
+      - "manifests/**"
+      - "layers/meta-project/**"
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: yocto-full-cmdline-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-full-cmdline:
+    name: Build core-image-full-cmdline
+    runs-on: ubuntu-24.04
+    container:
+      image: ghcr.io/${{ github.repository_owner }}/yocto-build:ubuntu-22.04
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - name: Checkout manifest repository
+        uses: actions/checkout@v4
+
+      - name: Initialize and sync upstream layers
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo init -u $(pwd) -m manifests/default.xml
+          repo sync --no-clone-bundle --no-tags -j"$(nproc)"
+
+      - name: Build core-image-full-cmdline
+        shell: bash
+        run: |
+          set -euo pipefail
+          targets="core-image-full-cmdline"
+          TEMPLATECONF=$(pwd)/layers/meta-project/conf/templates/default \
+            . layers/poky/oe-init-build-env build
+          bitbake $targets -c cleansstate
+          bitbake $targets

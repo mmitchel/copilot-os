@@ -1,0 +1,18 @@
+{
+  "include": [
+    "layers/meta-project"
+  ],
+  "exclude": [
+    "build",
+    ".repo",
+    "layers/poky",
+    "layers/meta-clang",
+    "layers/meta-intel",
+    "layers/meta-openembedded",
+    "layers/meta-raspberrypi",
+    "layers/meta-security",
+    "layers/meta-tegra",
+    "layers/meta-updater",
+    "layers/meta-virtualization"
+  ]
+}

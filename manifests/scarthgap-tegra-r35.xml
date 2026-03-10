@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<manifest>
+  <!--
+    Google repo tool install (Linux):
+
+    Option 1: distro package (if available)
+      sudo apt-get update && sudo apt-get install -y repo
+
+    Option 2: upstream launcher script
+      mkdir -p "$HOME/bin"
+      curl -fsSL https://storage.googleapis.com/git-repo-downloads/repo -o "$HOME/bin/repo"
+      chmod a+x "$HOME/bin/repo"
+      export PATH="$HOME/bin:$PATH"
+
+    Initialize/sync with this manifest (local checkout):
+      cd <project-root>
+      repo init -u . -m manifests/default.xml
+      repo sync -j$(nproc)
+
+    Initialize/sync with this manifest (remote git URL):
+      repo init -u <manifest-repo-url> -m manifests/default.xml -b <manifest-branch>
+      repo sync -j$(nproc)
+
+    Initialize Poky build environment (from workspace root):
+      cd <project-root>
+      . layers/poky/oe-init-build-env build
+
+    Initialize Poky using meta-project template:
+      cd <project-root>
+      TEMPLATECONF=../layers/meta-project/conf/templates/default \
+      . layers/poky/oe-init-build-env build
+
+    Example first build target:
+      bitbake core-image-project
+  -->
+  <remote name="yocto" fetch="https://git.yoctoproject.org/" />
+  <remote name="openembedded" fetch="https://github.com/openembedded/" />
+  <remote name="github" fetch="https://github.com/" />
+
+  <default sync-j="4" />
+
+  <project name="poky" path="layers/poky" remote="yocto" revision="scarthgap"/>
+  <project name="meta-openembedded" path="layers/meta-openembedded" remote="openembedded" revision="scarthgap"/>
+  <project name="meta-security" path="layers/meta-security" remote="yocto" revision="scarthgap"/>
+  <project name="meta-virtualization" path="layers/meta-virtualization" remote="yocto" revision="scarthgap"/>
+  <project name="uptane/meta-updater" path="layers/meta-updater" remote="github" revision="scarthgap"/>
+  <project name="kraj/meta-clang" path="layers/meta-clang" remote="github" revision="scarthgap"/>
+  <project name="meta-intel" path="layers/meta-intel" remote="yocto" revision="scarthgap"/>
+  <project name="agherzan/meta-raspberrypi" path="layers/meta-raspberrypi" remote="github" revision="scarthgap"/>
+  <project name="OE4T/meta-tegra" path="layers/meta-tegra" remote="github" revision="scarthgap-l4t-r35.x"/>
+
+</manifest>

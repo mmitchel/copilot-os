@@ -1,0 +1,132 @@
+#!/bin/sh
+
+# Supported kernel command line forms:
+#   tpm
+#   tpm-unseal=<sealed-blob-file> [tpm-keyfile=/run/cryptsetup.key] [tpm-well-known]
+#   tpm2-device=/dev/tpmrm0
+#   tpm2-unseal=<persistent-handle-or-context> [tpm-keyfile=/run/cryptsetup.key]
+#   tpm2-nvindex=<nv-index> [tpm-keyfile=/run/cryptsetup.key]
+#
+# When tpm-unseal, tpm2-unseal, or tpm2-nvindex is used, this module writes the
+# retrieved secret to a file and sets bootparam_cryptkey so the LUKS module can
+# reuse it.
+
+tpm_resolve_device() {
+	if [ -n "$bootparam_tpm2_device" ]; then
+		echo "$bootparam_tpm2_device"
+		return
+	fi
+
+	if [ -c /dev/tpmrm0 ]; then
+		echo /dev/tpmrm0
+		return
+	fi
+
+	echo /dev/tpm0
+}
+
+tpm_enabled() {
+	[ -n "$bootparam_tpm" ] || \
+	[ -n "$bootparam_tpm_unseal" ] || \
+	[ -n "$bootparam_tpm2_device" ] || \
+	[ -n "$bootparam_tpm2_unseal" ] || \
+	[ -n "$bootparam_tpm2_nvindex" ]
+}
+
+tpm_key_file_path() {
+	if [ -n "$bootparam_tpm_keyfile" ]; then
+		echo "$bootparam_tpm_keyfile"
+		return
+	fi
+
+	if [ -n "$bootparam_tpm2_keyfile" ]; then
+		echo "$bootparam_tpm2_keyfile"
+		return
+	fi
+
+	echo /run/cryptsetup.key
+}
+
+tpm_wait_for_device() {
+	tpm_device="$1"
+	attempts=0
+
+	while [ ! -c "$tpm_device" ]; do
+		attempts=$((attempts + 1))
+		if [ "$attempts" -ge 10 ]; then
+			return 1
+		fi
+
+		if command -v udevadm >/dev/null 2>&1; then
+			udevadm settle || true
+		fi
+		sleep 1
+	done
+
+	return 0
+}
+
+tpm_run() {
+	tpm_device=""
+	tcti=""
+	key_file=""
+	key_dir=""
+	well_known_args=""
+
+	load_kernel_module tpm
+	load_kernel_module tpm_tis
+	load_kernel_module tpm_tis_core
+	load_kernel_module tpm_crb
+	load_kernel_module tpm_tis_spi
+
+	tpm_device=$(tpm_resolve_device)
+	if ! tpm_wait_for_device "$tpm_device"; then
+		fatal "ERROR: TPM device '$tpm_device' did not appear in initramfs."
+	fi
+
+	info "Using TPM device $tpm_device"
+
+	if [ -z "$bootparam_tpm_unseal" ] && [ -z "$bootparam_tpm2_unseal" ] && [ -z "$bootparam_tpm2_nvindex" ]; then
+		return
+	fi
+
+	key_file=$(tpm_key_file_path)
+	key_dir=$(dirname "$key_file")
+	mkdir -p "$key_dir"
+
+	if [ -n "$bootparam_tpm_unseal" ]; then
+		if ! command -v tpm_unsealdata >/dev/null 2>&1; then
+			fatal "ERROR: tpm-tools are not available in initramfs."
+		fi
+
+		if [ -n "$bootparam_tpm_well_known" ]; then
+			well_known_args="-z"
+		fi
+
+		info "Unsealing key material from TPM 1.2 blob $bootparam_tpm_unseal"
+		if ! tpm_unsealdata $well_known_args -i "$bootparam_tpm_unseal" -o "$key_file"; then
+			fatal "ERROR: Failed to unseal TPM 1.2 blob '$bootparam_tpm_unseal'."
+		fi
+	else
+		if ! command -v tpm2_unseal >/dev/null 2>&1; then
+			fatal "ERROR: tpm2-tools are not available in initramfs."
+		fi
+
+		tcti="device:$tpm_device"
+		if [ -n "$bootparam_tpm2_unseal" ]; then
+			info "Unsealing key material from TPM2 object $bootparam_tpm2_unseal"
+			if ! tpm2_unseal -T "$tcti" -c "$bootparam_tpm2_unseal" > "$key_file"; then
+				fatal "ERROR: Failed to unseal key material from TPM2 object '$bootparam_tpm2_unseal'."
+			fi
+		else
+			info "Reading key material from TPM2 NV index $bootparam_tpm2_nvindex"
+			if ! tpm2_nvread -T "$tcti" "$bootparam_tpm2_nvindex" > "$key_file"; then
+				fatal "ERROR: Failed to read TPM2 NV index '$bootparam_tpm2_nvindex'."
+			fi
+		fi
+	fi
+
+	chmod 0600 "$key_file"
+	bootparam_cryptkey="$key_file"
+	info "Stored TPM-derived key material in $key_file for LUKS unlock"
+}

@@ -1,0 +1,82 @@
+name: Yocto Container Images
+
+on:
+  workflow_dispatch:
+    inputs:
+      push_to_ghcr:
+        description: Push container images to GHCR
+        required: false
+        default: "false"
+  push:
+    paths:
+      - ".github/workflows/yocto-container-images.yml"
+      - "containers/yocto/**"
+  pull_request:
+    paths:
+      - ".github/workflows/yocto-container-images.yml"
+      - "containers/yocto/**"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build-containers:
+    name: Build ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: ubuntu-20.04
+            dockerfile: containers/yocto/ubuntu-20.04/Dockerfile
+            image_tag: ubuntu-20.04
+          - name: ubuntu-22.04
+            dockerfile: containers/yocto/ubuntu-22.04/Dockerfile
+            image_tag: ubuntu-22.04
+          - name: ubuntu-24.04
+            dockerfile: containers/yocto/ubuntu-24.04/Dockerfile
+            image_tag: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build \
+            --file "${{ matrix.dockerfile }}" \
+            --tag "yocto-build:${{ matrix.image_tag }}" \
+            .
+
+      - name: Save image archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker save "yocto-build:${{ matrix.image_tag }}" | zstd -T0 -19 -o "yocto-build-${{ matrix.image_tag }}.tar.zst"
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: yocto-build-${{ matrix.image_tag }}
+          path: yocto-build-${{ matrix.image_tag }}.tar.zst
+          if-no-files-found: error
+
+      - name: Log in to GHCR
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.push_to_ghcr == 'true' }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push image to GHCR
+        if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.push_to_ghcr == 'true' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE="ghcr.io/${{ github.repository_owner }}/yocto-build:${{ matrix.image_tag }}"
+          docker tag "yocto-build:${{ matrix.image_tag }}" "$IMAGE"
+          docker push "$IMAGE"
